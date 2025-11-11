@@ -84,7 +84,7 @@ void process(vector<Field> &table, vector<bool> &complete) {
     for (int i = 0; i < n; i++)
         table[i].turnAroundTime = table[i].finishTime - table[i].arrivalTime;
 }
-\
+
 void output(vector<Field> &table)
 {
     int n = table.size();

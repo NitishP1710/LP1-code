@@ -1,0 +1,6 @@
+Index	Symbol	Address
+1	L1	100
+2	X	110
+3	Y	112
+4	NEXT	103
+5	Z	113

@@ -1,171 +1,141 @@
-// C++ Program for implementing
-// Round Robin Algorithm
-// code by sparsh_cbs
-#include <iostream>
-
+#include <bits/stdc++.h>
 using namespace std;
 
-void queueUpdation(int queue[], int timer, int arrival[], int n, int maxProccessIndex)
-{
-    int zeroIndex;
-    for (int i = 0; i < n; i++)
-    {
-        if (queue[i] == 0)
-        {
-            zeroIndex = i;
-            break;
+class Field {
+public:
+    string job;
+    float arrivalTime;
+    float runTime;
+    float remainingTime;
+    float startTime;
+    float finishTime;
+    float turnAroundTime;
+    float waitingTime;
+    bool done;
+    int executionSequence;
+
+    Field() {
+        job = "";
+        arrivalTime = 0;
+        runTime = 0;
+        remainingTime = 0;
+        startTime = -1;
+        finishTime = 0;
+        turnAroundTime = 0;
+        waitingTime = 0;
+        done = false;
+        executionSequence = 0;
+    }
+
+    void input(int i) {
+        cout << "Enter job " << i + 1 << " name: ";
+        cin >> job;
+        cout << "Enter arrival time of job " << job << ": ";
+        cin >> arrivalTime;
+        cout << "Enter run time of job " << job << ": ";
+        cin >> runTime;
+        remainingTime = runTime;
+    }
+};
+
+void process(vector<Field> &table, float tq) {
+    int n = table.size();
+    sort(table.begin(), table.end(), [](const Field &a, const Field &b){
+        if (a.arrivalTime == b.arrivalTime) return a.job < b.job; // stable order
+        return a.arrivalTime < b.arrivalTime;
+    });
+
+    queue<int> q;
+    vector<bool> inQ(n, false), done(n, false);
+    int completed = 0, executed = 0;
+    float time = table[0].arrivalTime;
+
+    // seed queue with all processes that arrive at the earliest time
+    for (int i = 0; i < n; i++) {
+        if (table[i].arrivalTime == time) { q.push(i); inQ[i] = true; }
+    }
+
+    while (completed < n) {
+        if (q.empty()) {
+            // jump to next arrival
+            float nextAt = FLT_MAX; int nextIdx = -1;
+            for (int i = 0; i < n; i++)
+                if (!done[i] && table[i].arrivalTime < nextAt) { nextAt = table[i].arrivalTime; nextIdx = i; }
+            time = nextAt; q.push(nextIdx); inQ[nextIdx] = true;
         }
-    }
-    queue[zeroIndex] = maxProccessIndex + 1;
-}
 
-void queueMaintainence(int queue[], int n)
-{
-    for (int i = 0; (i < n - 1) && (queue[i + 1] != 0); i++)
-    {
-        int temp = queue[i];
-        queue[i] = queue[i + 1];
-        queue[i + 1] = temp;
-    }
-}
+        int idx = q.front(); q.pop(); inQ[idx] = false;
 
-void checkNewArrival(int timer, int arrival[], int n, int maxProccessIndex, int queue[])
-{
-    if (timer <= arrival[n - 1])
-    {
-        bool newArrival = false;
-        for (int j = (maxProccessIndex + 1); j < n; j++)
-        {
-            if (arrival[j] <= timer)
-            {
-                if (maxProccessIndex < j)
-                {
-                    maxProccessIndex = j;
-                    newArrival = true;
-                }
+        if (table[idx].startTime == -1) table[idx].startTime = time;
+
+        float slice = min(tq, table[idx].remainingTime);
+        table[idx].remainingTime -= slice;
+        time += slice;
+
+        // 1) enqueue ONLY newly arrived processes (skip the one that just ran)
+        for (int i = 0; i < n; i++) {
+            if (i == idx) continue;                      // <<< critical fix
+            if (!done[i] && !inQ[i] && table[i].arrivalTime <= time) {
+                q.push(i); inQ[i] = true;
             }
         }
-        // adds the incoming process to the ready queue
-        //(if any arrives)
-        if (newArrival)
-            queueUpdation(queue, timer, arrival, n, maxProccessIndex);
+
+        // 2) then, if current didn't finish, requeue it at the tail
+        if (table[idx].remainingTime > 0) {
+            q.push(idx); inQ[idx] = true;
+        } else {
+            done[idx] = true;
+            table[idx].finishTime = time;
+            table[idx].executionSequence = executed++;
+            completed++;
+        }
+    }
+
+    // metrics
+    for (auto &p : table) {
+        p.turnAroundTime = p.finishTime - p.arrivalTime;
+        p.waitingTime    = p.turnAroundTime - p.runTime;
     }
 }
 
-// Driver Code
-int main()
-{
-    int n, tq, timer = 0, maxProccessIndex = 0;
-    float avgWait = 0, avgTT = 0;
-    cout << "Enter the time quanta : "<<endl;
-    cin >> tq;
-    cout << "Enter the number of processes : " << endl;
+void output(vector<Field> &table) {
+    cout << "\n-------------------------------------------------------------------------------\n";
+    cout << "Job\tAT\tBT\tST\tCT\tTAT\tWT\tSeq\n";
+    cout << "-------------------------------------------------------------------------------\n";
+
+    float totalTAT = 0, totalWT = 0;
+    for (auto &p : table) {
+        cout << p.job << "\t"
+             << p.arrivalTime << "\t"
+             << p.runTime << "\t"
+             << p.startTime << "\t"
+             << p.finishTime << "\t"
+             << p.turnAroundTime << "\t"
+             << p.waitingTime << "\t"
+             << p.executionSequence << endl;
+
+        totalTAT += p.turnAroundTime;
+        totalWT += p.waitingTime;
+    }
+
+    cout << "-------------------------------------------------------------------------------\n";
+    cout << fixed << setprecision(2);
+    cout << "Average Turnaround Time = " << totalTAT / table.size() << endl;
+    cout << "Average Waiting Time = " << totalWT / table.size() << endl;
+}
+
+int main() {
+    int n;
+    float tq;
+    cout << "Enter number of tasks: ";
     cin >> n;
-    int arrival[n], burst[n], wait[n], turn[n], queue[n], temp_burst[n];
-    bool complete[n];
+    cout << "Enter Time Quantum: ";
+    cin >> tq;
 
-    cout << "Enter the arrival time of the processes : " << endl;
+    vector<Field> table(n);
     for (int i = 0; i < n; i++)
-        cin >> arrival[i];
+        table[i].input(i);
 
-    cout << "Enter the burst time of the processes : "<<endl;
-    for (int i = 0; i < n; i++)
-    {
-        cin >> burst[i];
-        temp_burst[i] = burst[i];
-    }
-
-    for (int i = 0; i < n; i++)
-    { 
-        complete[i] = false;
-        queue[i] = 0;
-    }
-    // Incrementing Timer until the first process arrives
-    while (timer < arrival[0]){ 
-        timer++;
-    }
-    queue[0] = 1;
-
-    while (true)
-    {
-        bool flag = true;//check wheteher all process completed
-        for (int i = 0; i < n; i++)
-        {
-            if (temp_burst[i] != 0)
-            {
-                flag = false;
-                break;
-            }
-        }
-        if (flag)
-            break; // flag is set means busrst time of all process is zero
-
-        for (int i = 0; (i < n) && (queue[i] != 0); i++)
-        {
-            int ctr = 0;
-            while ((ctr < tq) && (temp_burst[queue[0] - 1] > 0))
-            {
-                temp_burst[queue[0] - 1] -= 1;
-                timer += 1;
-                ctr++;
-
-               
-                checkNewArrival(timer, arrival, n, maxProccessIndex, queue);
-            }
-            
-            if ((temp_burst[queue[0] - 1] == 0) && (complete[queue[0] - 1] == false))
-            {
-               
-                turn[queue[0] - 1] = timer;
-                complete[queue[0] - 1] = true;
-            }
-
-            // checks whether or not CPU is idle
-            bool idle = true;
-            if (queue[n - 1] == 0)
-            {
-                for (int i = 0; i < n && queue[i] != 0; i++)
-                {
-                    if (complete[queue[i] - 1] == false)
-                    {
-                        idle = false;
-                    }
-                }
-            }
-            else
-                idle = false;
-
-            if (idle)
-            {
-                timer++;
-                checkNewArrival(timer, arrival, n, maxProccessIndex, queue);
-            }
-
-            
-            queueMaintainence(queue, n);
-        }
-    }
-
-    for (int i = 0; i < n; i++)
-    {
-        turn[i] = turn[i] - arrival[i];
-        wait[i] = turn[i] - burst[i];
-    }
-
-    cout << "\nProgram No.\tArrival Time\tBurst Time\tWait Time\tTurnAround Time"
-         << endl;
-    for (int i = 0; i < n; i++)
-    {
-        cout << i + 1 << "\t\t" << arrival[i] << "\t\t"
-             << burst[i] << "\t\t" << wait[i] << "\t\t" << turn[i] << endl;
-    }
-    for (int i = 0; i < n; i++)
-    {
-        avgWait += wait[i];
-        avgTT += turn[i];
-    }
-    cout << "\nAverage wait time : " << (avgWait / n)
-         << "\nAverage Turn Around Time : " << (avgTT / n);
-
-    return 0;
+    process(table, tq);
+    output(table);
 }
