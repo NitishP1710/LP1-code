@@ -10,5 +10,5 @@ NEXT   ADD      AREG,   X
        STOP
 X      DS       2
 Y      DS       1
-Z      DC       '9'
+Z      DC       9
        END
