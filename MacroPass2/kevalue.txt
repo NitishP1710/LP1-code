@@ -1,2 +1,3 @@
-(1,E,AREG)
-(2,O,DREG)
+index  parametrer   value
+1       E           AREG
+2       O           DREG

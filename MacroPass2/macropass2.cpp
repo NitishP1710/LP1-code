@@ -1,204 +1,212 @@
 #include <bits/stdc++.h>
 using namespace std;
 
-struct macroName {
+struct MNT {
     string name;
-    int positionalParam;
-    int keywordParam;
-    int kpdptr;
-    int mdtptr;
+    int pp, kp, kpdptr, mdtptr;
 };
-struct parameterName {
-    int position;
-    string parameter;
+struct MDT {
+    int index;
+    string opcode, op1, op2;
 };
-struct keyValue {
-    int pointer;
-    string name;
-    string value;
+struct KPT {
+    int index;
+    string parameter, value;
 };
-struct defination {
-    int ptr; // address
-    string instruction;
-    string token1;
-    string token2;
-};
-struct actual {
-    int position;
-    string value;
+struct PNT {
+    string macro;
+    vector<string> params; // 1-indexed logically
 };
 
-vector<pair<string, vector<parameterName>>> PNTTAB;
-vector<defination> MDTAB;
-vector<macroName> MNTAB;
-vector<keyValue> KPDTAB;
-vector<pair<string,vector<actual>>> APTAB;
+vector<MNT> MNTAB;
+vector<MDT> MDTAB;
+vector<KPT> KPDTAB;
+vector<PNT> PNTTAB;
 
-void createApt(){
-    vector<actual> v;
-    string name=PNTTAB[0].first;
-    vector<parameterName> v=PNTTAB[0].second;
-    actual a,b;
-    a.position=1;
-    a.value=v[0].value;
-
+string trim(string s) {
+    s.erase(remove_if(s.begin(), s.end(), ::isspace), s.end());
+    return s;
 }
-void parseMDT() {
-    ifstream fin("mdt.txt");
-    string line;
-    while (getline(fin, line)) {
-        if (line.empty()) continue;
-        string token = "";
-        vector<string> current;
-        for (char c : line) {
-            if (c != ',' && c != '(' && c != ')')
-                token += c;
-            else {
-                if (!token.empty()) current.push_back(token);
-                token = "";
-            }
-        }
-        if (!token.empty()) current.push_back(token);
 
-        defination d;
-        d.ptr = stoi(current[0]);
-        d.instruction = current.size() > 1 ? current[1] : "";
-        d.token1 = current.size() > 2 ? current[2] : "";
-        d.token2 = current.size() > 3 ? current[3] : "";
-        MDTAB.push_back(d);
-    }
-}
+// ------------------- Parse tables -------------------
 
 void parseMNT() {
     ifstream fin("mnt.txt");
+    string name;
     string line;
-    while (getline(fin, line)) {
-        if (line.empty()) continue;
-        string token = "";
-        vector<string> current;
-        for (char c : line) {
-            if (c != ',' && c != '(' && c != ')')
-                token += c;
-            else {
-                if (!token.empty()) current.push_back(token);
-                token = "";
-            }
-        }
-        if (!token.empty()) current.push_back(token);
-
-        if (current.size() < 5) continue;
-
-        macroName m;
-        m.name = current[0];
-        m.positionalParam = stoi(current[1]);
-        m.keywordParam = stoi(current[2]);
-        m.kpdptr = stoi(current[3]);
-        m.mdtptr = stoi(current[4]);
+    getline(fin, line); // header skip
+    while (fin >> name) {
+        MNT m;
+        m.name = name;
+        fin >> m.pp >> m.kp >> m.kpdptr >> m.mdtptr;
         MNTAB.push_back(m);
     }
+    fin.close();
 }
+
+void parseMDT() {
+    ifstream fin("mdt.txt");
+    MDT m;
+    while (fin >> m.index >> m.opcode >> m.op1 >> m.op2) {
+        MDTAB.push_back(m);
+    }
+    fin.close();
+}
+
 void parseKPT() {
     ifstream fin("kevalue.txt");
     string line;
-    while (getline(fin, line)) {
-        if (line.empty()) continue;
-        string token = "";
-        vector<string> current;
-
-        for (char c : line) {
-            if (c != ',' && c != '(' && c != ')')
-                token += c;
-            else {
-                if (!token.empty()) {
-                    current.push_back(token);
-                    token = "";
-                }
-            }
-        }
-        if (!token.empty()) current.push_back(token);  
-        if (current.size() < 2) continue;
-        keyValue k;
-        k.pointer = stoi(current[0]);
-        k.name = current.size() > 1 ? current[1] : "";
-        k.value = current.size() > 2 ? current[2] : "";
+    getline(fin, line); // header skip
+    while (true) {
+        KPT k;
+        if (!(fin >> k.index >> k.parameter >> k.value))
+            break;
         KPDTAB.push_back(k);
     }
+    fin.close();
 }
-void parsepnt() {
+
+void parsePNT() {
     ifstream fin("pntab.txt");
     string line;
+    PNT current;
     while (getline(fin, line)) {
         if (line.empty()) continue;
-        string token = "";
-        vector<string> current;
-        for (char c : line) {
-            if (c != ',' && c != '(' && c != ')')
-                token += c;
-            else {
-                if (!token.empty()) current.push_back(token);
-                token = "";
+        if (line[0] != '(') {  // macro name line
+            if (!current.macro.empty()) {
+                PNTTAB.push_back(current);
+                current.params.clear();
+            }
+            current.macro = trim(line);
+        } else {
+            // remove ( and )
+            line.erase(remove(line.begin(), line.end(), '('), line.end());
+            line.erase(remove(line.begin(), line.end(), ')'), line.end());
+            // format: 1-O
+            size_t dash = line.find('-');
+            if (dash != string::npos) {
+                string param = line.substr(dash + 1);
+                current.params.push_back(param);
             }
         }
-        if (!token.empty()) current.push_back(token);
-
-        if (current.size() < 2) continue;
-
-        string currentMacro = current[0];
-        vector<parameterName> v;
-        for (int i = 1; i < current.size(); i++) {
-            parameterName p;
-            p.parameter = current[i];
-            p.position = i;
-            v.push_back(p);
-        }
-        PNTTAB.push_back({currentMacro, v});
     }
+    if (!current.macro.empty())
+        PNTTAB.push_back(current);
+    fin.close();
 }
 
-// ------------------- PRINT -------------------
-void printMDT() {
-    cout << "\n--- MDTAB ---\n";
-    cout << "PTR\tINSTRUCTION\tTOKEN1\tTOKEN2\n";
-    for (auto &d : MDTAB)
-        cout << d.ptr << "\t" << d.instruction << "\t\t" << d.token1 << "\t" << d.token2 << endl;
+// ------------------- Expansion logic -------------------
+
+int findMNTIndex(string name) {
+    for (int i = 0; i < MNTAB.size(); i++)
+        if (MNTAB[i].name == name)
+            return i;
+    return -1;
 }
 
-void printMNT() {
-    cout << "\n--- MNTAB ---\n";
-    cout << "NAME\tPP\tKP\tKPD_PTR\tMDT_PTR\n";
-    for (auto &m : MNTAB)
-        cout << m.name << "\t" << m.positionalParam << "\t" << m.keywordParam << "\t" << m.kpdptr << "\t" << m.mdtptr << endl;
+PNT findPNT(string name) {
+    for (auto &p : PNTTAB)
+        if (p.macro == name)
+            return p;
+    return {};
 }
 
-void printKPT() {
-    cout << "\n--- KPDTAB ---\n";
-    cout << "PTR\tNAME\tVALUE\n";
-    for (auto &k : KPDTAB)
-        cout << k.pointer << "\t" << k.name << "\t" << k.value << endl;
-}
+void expandMacro(string name, vector<string> args, ofstream &fout) {
+    int idx = findMNTIndex(name);
+    if (idx == -1) return;
 
-void printPNT() {
-    cout << "\n--- PNTTAB ---\n";
-    for (auto &macro : PNTTAB) {
-        cout << "Macro: " << macro.first << endl;
-        cout << "Pos\tParameter\n";
-        for (auto &p : macro.second)
-            cout << p.position << "\t" << p.parameter << endl;
+    MNT m = MNTAB[idx];
+    PNT p = findPNT(name);
+
+    // Build APTAB
+    unordered_map<string, string> APTAB;
+
+    // Positional params
+    for (int i = 0; i < m.pp && i < args.size(); i++) {
+        APTAB[p.params[i]] = args[i];
+    }
+
+    // Default keyword values
+    int kpIndex = m.kpdptr - 1;
+    for (int i = 0; i < m.kp; i++) {
+        if (kpIndex + i < KPDTAB.size()) {
+            APTAB[KPDTAB[kpIndex + i].parameter] = KPDTAB[kpIndex + i].value;
+        }
+    }
+
+    // Keyword overrides from call
+    for (string a : args) {
+        size_t eq = a.find('=');
+        if (eq != string::npos) {
+            string key = a.substr(0, eq);
+            string val = a.substr(eq + 1);
+            APTAB[key] = val;
+        }
+    }
+
+    // Expand MDT
+    int i = m.mdtptr - 1;
+    while (i < MDTAB.size()) {
+        MDT d = MDTAB[i];
+        if (d.opcode == "MEND") break;
+
+        string op1 = d.op1, op2 = d.op2;
+        // Replace (P-n)
+        if (op1.find("(P-") != string::npos) {
+            int pos = op1[3] - '0';
+            op1 = APTAB[p.params[pos - 1]];
+        }
+        if (op2.find("(P-") != string::npos) {
+            int pos = op2[3] - '0';
+            op2 = APTAB[p.params[pos - 1]];
+        }
+
+        fout << d.opcode << " " << op1;
+        if (op2 != "()") fout << ", " << op2;
+        fout << "\n";
+
+        i++;
     }
 }
 
 // ------------------- MAIN -------------------
 
 int main() {
-    parseMDT();
     parseMNT();
+    parseMDT();
     parseKPT();
-    parsepnt();
+    parsePNT();
 
-    printMDT();
-    printMNT();
-    printKPT();
-    printPNT();
+    ifstream fin("input.txt");
+    ofstream fout("output.txt");
 
+    string line;
+    while (getline(fin, line)) {
+        if (line.empty()) continue;
+
+        stringstream ss(line);
+        string first;
+        ss >> first;
+
+        int idx = findMNTIndex(first);
+        if (idx == -1) {
+            fout << line << "\n";  // not a macro
+            continue;
+        }
+
+        string argsPart;
+        getline(ss, argsPart);
+        if (argsPart.empty()) { expandMacro(first, {}, fout); continue; }
+
+        argsPart.erase(remove(argsPart.begin(), argsPart.end(), ' '), argsPart.end());
+        vector<string> args;
+        string temp;
+        stringstream s2(argsPart);
+        while (getline(s2, temp, ',')) args.push_back(temp);
+
+        expandMacro(first, args, fout);
+    }
+
+    cout << "\nMacro Expansion Done! Check output.txt\n";
     return 0;
 }
